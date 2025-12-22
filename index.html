@@ -1,321 +1,424 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="id">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TUGAS WEB GEOSPASIAL</title>
-    
+    <title>SISTEM INFORMASI PERTANAHAN 3D</title>
+
     <link href="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css" rel="stylesheet" />
     <script src="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js"></script>
-
-    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;600;700&display=swap" rel="stylesheet">
+    
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+    
+    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet">
 
     <style>
         :root {
-            --primary-color: #00f3ff; /* Cyan Neon */
-            --bg-panel: rgba(0, 0, 0, 0.85);
-            --border-color: rgba(0, 243, 255, 0.5);
+            --primary: #00f3ff;
+            --secondary: #ff0055;
+            --bg-glass: rgba(10, 15, 20, 0.95);
         }
 
-        body { margin: 0; padding: 0; overflow: hidden; background: #000; font-family: 'Rajdhani', sans-serif; color: var(--primary-color); }
-        #map { position: absolute; top: 0; bottom: 0; width: 100%; z-index: 0; }
+        body { margin: 0; padding: 0; background: #000; font-family: 'Rajdhani', sans-serif; overflow: hidden; color: white; }
+        #map { position: absolute; top: 0; bottom: 0; width: 100%; }
 
-        .hud-container {
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            pointer-events: none; z-index: 10;
-            background: radial-gradient(circle at center, transparent 60%, rgba(0,0,0,0.4) 100%);
+        /* LOADING */
+        #loader {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: #000; z-index: 9999; display: flex; flex-direction: column;
+            justify-content: center; align-items: center; transition: opacity 0.5s;
         }
+        .spinner {
+            width: 50px; height: 50px; border: 4px solid var(--primary);
+            border-top: 4px solid transparent; border-radius: 50%;
+            animation: putar 1s linear infinite;
+        }
+        @keyframes putar { to { transform: rotate(360deg); } }
 
         /* HEADER */
-        .top-bar {
-            position: absolute; top: 20px; left: 20px; right: 20px;
-            display: flex; justify-content: space-between; align-items: flex-start;
-            pointer-events: auto;
+        .header-box {
+            position: absolute; top: 20px; left: 20px;
+            background: var(--bg-glass); padding: 15px 25px;
+            border-left: 4px solid var(--primary); pointer-events: auto;
+            box-shadow: 0 0 15px rgba(0, 243, 255, 0.1); z-index: 50;
         }
-        .title-box h1 { margin: 0; font-size: 28px; font-weight: 700; letter-spacing: 2px; text-shadow: 0 0 10px var(--primary-color); }
-        .title-box span { font-size: 14px; opacity: 0.7; letter-spacing: 1px; }
+        h1 { margin: 0; font-size: 22px; text-transform: uppercase; letter-spacing: 1px; }
+        .subtitle { font-size: 11px; color: var(--primary); letter-spacing: 2px; font-weight: bold; }
 
-        /* BASEMAP SELECTOR */
-        .basemap-selector { display: flex; gap: 5px; background: var(--bg-panel); padding: 5px; border: 1px solid var(--border-color); border-radius: 4px; flex-wrap: wrap; justify-content: flex-end; max-width: 400px;}
-        .map-btn {
-            background: transparent; border: 1px solid transparent; color: rgba(255,255,255,0.7);
-            padding: 5px 10px; cursor: pointer; font-family: 'Rajdhani'; font-weight: 600; transition: 0.2s; font-size: 12px;
+        /* SEARCH */
+        .search-wrapper {
+            position: absolute; top: 20px; right: 20px;
+            z-index: 50; pointer-events: auto;
         }
-        .map-btn:hover, .map-btn.active { background: var(--primary-color); color: #000; box-shadow: 0 0 10px var(--primary-color); }
+        .search-container {
+            display: flex; gap: 5px;
+            background: var(--bg-glass); padding: 10px; border-radius: 4px;
+            border: 1px solid #333;
+            box-shadow: 0 0 15px rgba(0,0,0,0.5);
+        }
+        #searchInput {
+            background: rgba(0,0,0,0.5); border: 1px solid #444; color: white;
+            padding: 8px; width: 220px; font-family: 'Rajdhani'; font-size: 14px;
+        }
+        #searchInput:focus { outline: 1px solid var(--primary); }
+        .btn-search {
+            background: var(--primary); color: black; border: none; padding: 0 15px;
+            font-weight: bold; cursor: pointer; font-family: 'Rajdhani';
+            transition: 0.3s;
+        }
+        .btn-search:hover { background: white; }
 
-        /* BOTTOM PANEL */
-        .bottom-panel {
+        /* LEGENDA */
+        .legend-box {
+            position: absolute; bottom: 120px; right: 20px;
+            background: var(--bg-glass); padding: 15px;
+            border-left: 4px solid var(--primary); border-radius: 4px;
+            pointer-events: none; z-index: 40;
+            min-width: 180px;
+        }
+        .legend-title { margin: 0 0 10px 0; font-size: 14px; text-transform: uppercase; color: var(--primary); font-weight: bold; border-bottom: 1px solid #333; padding-bottom: 5px; }
+        .legend-item { display: flex; align-items: center; margin-bottom: 6px; font-size: 12px; }
+        .color-box { width: 16px; height: 16px; margin-right: 10px; border: 1px solid #555; display: inline-block; }
+
+        /* KONTROL BAWAH */
+        .controls {
             position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%);
-            display: flex; align-items: center; gap: 20px; pointer-events: auto;
-            background: var(--bg-panel); padding: 10px 30px;
-            border: 1px solid var(--border-color); border-radius: 50px;
-            backdrop-filter: blur(10px); box-shadow: 0 0 15px rgba(0, 243, 255, 0.2);
+            display: flex; gap: 10px; align-items: center; pointer-events: auto;
+            background: var(--bg-glass); padding: 10px 20px; border-radius: 50px; 
+            border: 1px solid rgba(0, 243, 255, 0.3); z-index: 50;
         }
-
-        .mode-switch { display: flex; gap: 5px; }
-        .icon-btn {
-            background: rgba(255,255,255,0.1); border: 1px solid transparent; color: #fff; 
-            width: 40px; height: 40px; border-radius: 50%; cursor: pointer; 
-            font-family: 'Rajdhani'; font-weight: 700; transition: 0.3s;
-            display: flex; align-items: center; justify-content: center; font-size: 18px;
+        .btn-ctrl {
+            background: rgba(255,255,255,0.1); border: 1px solid rgba(0,243,255,0.3); 
+            color: var(--primary); padding: 8px 15px; cursor: pointer; 
+            font-family: 'Rajdhani'; font-weight: bold; border-radius: 4px;
+            font-size: 12px;
         }
-        .icon-btn:hover, .icon-btn.active { background: var(--primary-color); color: #000; box-shadow: 0 0 15px var(--primary-color); border-color: #fff; }
+        .btn-ctrl.active { background: var(--primary); color: black; box-shadow: 0 0 10px var(--primary); }
+        .btn-ctrl:hover { background: rgba(0, 243, 255, 0.3); }
 
-        /* STATS */
-        .stat-group { text-align: center; min-width: 60px; }
-        .stat-value { display: block; font-size: 18px; font-weight: 700; color: #fff; }
-        .stat-label { font-size: 10px; opacity: 0.7; letter-spacing: 1px; }
-        .divider { width: 1px; height: 30px; background: rgba(255,255,255,0.2); }
-
-        /* DECORATION */
-        .crosshair { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 40px; height: 40px; border: 1px solid rgba(0, 243, 255, 0.5); border-radius: 50%; pointer-events: none;}
-        .crosshair::before { content: ''; position: absolute; top: 50%; left: -10px; width: 60px; height: 1px; background: var(--primary-color); }
-        .crosshair::after { content: ''; position: absolute; left: 50%; top: -10px; height: 60px; width: 1px; background: var(--primary-color); }
-        .corner { position: absolute; width: 20px; height: 20px; border: 2px solid var(--primary-color); opacity: 0.5; }
-        .tl { top: 20px; left: 20px; border-right: none; border-bottom: none; }
-        .tr { top: 20px; right: 20px; border-left: none; border-bottom: none; }
-        .bl { bottom: 20px; left: 20px; border-right: none; border-top: none; }
-        .br { bottom: 20px; right: 20px; border-left: none; border-top: none; }
-
-        /* POPUP STYLING (INFO WINDOW) */
-        .maplibregl-popup { max-width: 320px; font-family: 'Rajdhani', sans-serif; z-index: 50; }
-        .maplibregl-popup-content {
-            background: rgba(15, 20, 30, 0.95);
-            border: 1px solid var(--primary-color);
-            color: #fff; padding: 15px; border-radius: 4px;
-            box-shadow: 0 0 25px rgba(0, 243, 255, 0.3);
+        /* TOMBOL STREET VIEW SPESIAL */
+        .btn-sv {
+            background: #f1c40f; color: black; border: none;
         }
-        .maplibregl-popup-close-button { color: var(--primary-color); font-size: 24px; right: 8px; top: 5px; }
-        .maplibregl-popup-close-button:hover { background: none; color: #fff; }
-        .maplibregl-popup-tip { border-top-color: var(--primary-color); }
+        .btn-sv.active {
+            background: #f39c12; color: white; animation: kedip 1s infinite alternate;
+        }
+        @keyframes kedip { from { box-shadow: 0 0 5px #f1c40f; } to { box-shadow: 0 0 20px #f1c40f; } }
 
-        .popup-header { border-bottom: 1px solid var(--primary-color); margin-bottom: 10px; padding-bottom: 5px; }
-        .popup-title { font-size: 16px; font-weight: 700; color: var(--primary-color); letter-spacing: 1px; }
-        .popup-row { display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 13px; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 2px;}
-        .popup-label { opacity: 0.7; }
-        .popup-val { font-weight: 600; text-align: right; color: #fff; }
-
+        /* POPUP */
+        .maplibregl-popup-content { 
+            background: rgba(10, 15, 20, 0.98); 
+            border: 1px solid var(--primary); 
+            color: white; padding: 0; 
+            min-width: 300px;
+            box-shadow: 0 0 20px rgba(0,0,0,0.8);
+            font-family: 'Rajdhani';
+        }
+        .popup-head { background: var(--primary); color: black; padding: 8px 15px; font-weight: 700; font-size: 16px; display: flex; justify-content: space-between; align-items: center;}
+        .popup-body { padding: 15px; font-size: 14px; line-height: 1.6; }
+        .popup-row { display: flex; justify-content: space-between; border-bottom: 1px solid #333; padding: 5px 0; }
+        .popup-label { color: #aaa; font-size: 11px; text-transform: uppercase; width: 45%; }
+        .popup-val { text-align: right; font-weight: 600; color: #fff; width: 55%; word-break: break-word;}
+        .maplibregl-popup-close-button { display: none; } 
     </style>
 </head>
+
 <body>
+    <div id="loader">
+        <div class="spinner"></div>
+        <p style="margin-top: 15px; letter-spacing: 2px; font-size: 12px;" id="loader-text">MEMUAT GEOSPASIAL 3D...</p>
+    </div>
 
-    <div id="map"></div>
+    <div class="header-box">
+        <h1>WEBGIS PERTANAHAN</h1>
+        <div class="subtitle">3D CADASTRE // GOOGLE HYBRID</div>
+    </div>
 
-    <div class="hud-container">
-        <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
-
-        <div class="top-bar">
-            <div class="title-box">
-                <h1>PROTOTIPE SISTEM INFORMASI SPASIAL BERBASIS WEB 2D/3D // <span style="color:#fff">MAJENE</span></h1>
-                <span>LOCAL HOST/UNDEPLOYED</span>
-            </div>
-            <div class="basemap-selector">
-                <button class="map-btn active" onclick="changeBasemap('dark', this)">DARK</button>
-                <button class="map-btn" onclick="changeBasemap('google_street', this)">GOOGLE</button>
-                <button class="map-btn" onclick="changeBasemap('google_hybrid', this)">HYBRID</button>
-                <button class="map-btn" onclick="changeBasemap('satellite', this)">SAT</button>
-            </div>
-        </div>
-
-        <div class="crosshair"></div>
-
-        <div class="bottom-panel">
-            <div class="mode-switch">
-                <button class="icon-btn" id="btn2D" onclick="setMode('2D')">2D</button>
-                <button class="icon-btn active" id="btn3D" onclick="setMode('3D')">3D</button>
-            </div>
-            <div class="divider"></div>
-            <div class="stat-group">
-                <span class="stat-value" id="zoom-level">15.0</span>
-                <span class="stat-label">ZOOM</span>
-            </div>
-            <div class="divider"></div>
-            <div class="stat-group">
-                <span class="stat-value" id="pitch-level">60°</span>
-                <span class="stat-label">TILT</span>
-            </div>
+    <div class="search-wrapper">
+        <div class="search-container">
+            <input type="text" id="searchInput" placeholder="Cari NIB / NOP..." onkeypress="handleEnter(event)">
+            <button class="btn-search" onclick="cariData()">CARI</button>
         </div>
     </div>
 
+    <div class="legend-box">
+        <h4 class="legend-title">ZONA NILAI TANAH</h4>
+        <div class="legend-item"><span class="color-box" style="background: #f1c40f;"></span> 2 - 5 Juta</div>
+        <div class="legend-item"><span class="color-box" style="background: #e67e22;"></span> 5 - 10 Juta</div>
+        <div class="legend-item"><span class="color-box" style="background: #e74c3c;"></span> 10 - 20 Juta</div>
+        <div class="legend-item"><span class="color-box" style="background: #c0392b;"></span> > 20 Juta</div>
+        <div class="legend-item"><span class="color-box" style="background: #00f3ff;"></span> Lainnya/No Data</div>
+    </div>
+
+    <div id="map"></div>
+
+    <div class="controls">
+        <button class="btn-ctrl" onclick="gantiPeta('dark')">DARK</button>
+        <button class="btn-ctrl active" onclick="gantiPeta('sat')">GOOGLE SAT</button>
+        <div style="width:1px; height:20px; background:#444;"></div>
+        <button class="btn-ctrl active" id="btn3D" onclick="setMode('3D')">3D</button>
+        <button class="btn-ctrl" id="btn2D" onclick="setMode('2D')">2D</button>
+        <div style="width:1px; height:20px; background:#444;"></div>
+        <button class="btn-ctrl btn-sv" id="btnSV" onclick="toggleStreetView()">STREET VIEW</button>
+        <div style="width:1px; height:20px; background:#444;"></div>
+        <span id="total-objek" style="font-size: 12px; color: #888;">LOADING...</span>
+    </div>
+
     <script>
-        // --- 1. KONFIGURASI STYLE MAP (DITAMBAH GOOGLE) ---
+        // === KONFIGURASI ===
+        const URL_SUPABASE = 'https://zopziyhhprjwkximfibq.supabase.co'; 
+        const KEY_SUPABASE = 'sb_publishable_V4N0bDjmwbnYpQL32C6ovw_wQxa4uP6'; 
+        const NAMA_TABEL = 'dbweb'; 
+        // ===================
+
+        const { createClient } = supabase;
+        const db = createClient(URL_SUPABASE, KEY_SUPABASE);
+
+        // CONFIG BASEMAP (Google Hybrid sebagai Default)
         const styles = {
             dark: 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json',
-            
-            // PETA GOOGLE JALAN (Kuning/Putih)
-            google_street: {
+            sat: {
                 'version': 8,
-                'sources': {
-                    'google-street': {
-                        'type': 'raster',
-                        'tiles': ['https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}'], // m = Roadmap
-                        'tileSize': 256
-                    }
+                'sources': { 
+                    'g-hybrid': { 
+                        'type': 'raster', 
+                        // URL Resmi Google Maps Hybrid (Satelit + Label)
+                        'tiles': ['https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}'], 
+                        'tileSize': 256 
+                    } 
                 },
-                'layers': [{ 'id': 'google-layer', 'type': 'raster', 'source': 'google-street' }]
-            },
-
-            // PETA GOOGLE HYBRID (Satelit + Label Jalan)
-            google_hybrid: {
-                'version': 8,
-                'sources': {
-                    'google-hybrid': {
-                        'type': 'raster',
-                        'tiles': ['https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}'], // y = Hybrid
-                        'tileSize': 256
-                    }
-                },
-                'layers': [{ 'id': 'google-layer', 'type': 'raster', 'source': 'google-hybrid' }]
-            },
-
-            // PETA SATELIT POLOS (ESRI)
-            satellite: {
-                'version': 8,
-                'sources': {
-                    'raster-tiles': {
-                        'type': 'raster',
-                        'tiles': ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'],
-                        'tileSize': 256
-                    }
-                },
-                'layers': [{ 'id': 'simple-tiles', 'type': 'raster', 'source': 'raster-tiles' }]
+                'layers': [{ 'id': 'base', 'type': 'raster', 'source': 'g-hybrid' }]
             }
         };
 
-        var currentMode = '3D'; 
-
-        // --- 2. INIT MAP ---
-        var map = new maplibregl.Map({
+        const map = new maplibregl.Map({
             container: 'map',
-            style: styles.dark,
-            center: [118.973, -3.541],
-            zoom: 15.5,
+            style: styles.sat, // DEFAULT LANGSUNG SATELIT
+            center: [110.37, -7.78],
+            zoom: 16, // Zoom lebih dekat agar detail satelit terlihat
             pitch: 60,
-            bearing: -20,
-            antialias: true,
-            dragRotate: true,
-            pitchWithRotate: true,
-            maxPitch: 85
+            bearing: -10,
+            antialias: true
         });
 
-        map.addControl(new maplibregl.NavigationControl({ showCompass: true, showZoom: true, visualizePitch: true }), 'top-right');
+        map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), 'bottom-right');
 
-        // --- 3. LOAD LAYERS (DATA) ---
-        function loadCustomLayers() {
-            // A. TERRAIN
-            if (!map.getSource('terrain-source')) {
-                try {
-                    map.addSource('terrain-source', {
-                        'type': 'raster-dem',
-                        'tiles': ['https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png'],
-                        'encoding': 'terrarium',
-                        'tileSize': 256,
-                        'maxzoom': 15
-                    });
-                    map.setTerrain({ 'source': 'terrain-source', 'exaggeration': 1.0 });
-                } catch (e) {}
-            }
+        // VARIABLE GLOBAL
+        let isStreetViewActive = false;
 
-            // B. SKYBOX
-            if (!map.getLayer('sky')) {
-                try {
-                    map.addLayer({
-                        'id': 'sky', 'type': 'sky',
-                        'paint': { 'sky-type': 'atmosphere', 'sky-atmosphere-sun': [0.0, 90.0], 'sky-atmosphere-sun-intensity': 15 }
-                    });
-                } catch (e) {}
-            }
+        // === FUNGSI UTAMA ===
+        map.on('load', async () => {
+            // TERRAIN (PENTING UTK 3D)
+            map.addSource('terrain-source', {
+                type: 'raster-dem',
+                url: 'https://demotiles.maplibre.org/terrain-tiles/tiles.json',
+                tileSize: 256
+            });
+            map.setTerrain({ source: 'terrain-source', exaggeration: 1 });
 
-            // C. GEDUNG (GEOJSON)
-            if (!map.getSource('bangunan-sumber')) {
-                try {
-                    map.addSource('bangunan-sumber', {
-                        'type': 'geojson',
-                        // PASTIKAN NAMA FILE BENAR:
-                        'data': 'DATA/2D DUMMY.geojson' 
-                    });
+            try {
+                // LOAD DATA SUPABASE
+                const { data, error } = await db.from(NAMA_TABEL).select('*'); 
+                if (error) throw new Error(error.message);
 
-                    map.addLayer({
-                        'id': 'bangunan-3d',
-                        'type': 'fill-extrusion',
-                        'source': 'bangunan-sumber',
-                        'paint': {
-                            'fill-extrusion-color': '#00f3ff', // Warna Cyan
-                            'fill-extrusion-base': 0,
-                            'fill-extrusion-opacity': 0.6, // Agak transparan biar jalan kelihatan
-                            'fill-extrusion-height': 20
+                console.log("Data dimuat:", data.length);
+
+                const geojson = {
+                    "type": "FeatureCollection",
+                    "features": data.map(item => {
+                        const geomRaw = item.wkb_geometry || item.geometry || item.geom;
+                        const { wkb_geometry, geometry, geom, ...props } = item;
+                        if (!geomRaw) return null;
+                        let finalGeom = geomRaw;
+                        if (typeof geomRaw === 'string') {
+                            try { finalGeom = JSON.parse(geomRaw); } catch(e) {}
                         }
+                        return { "type": "Feature", "geometry": finalGeom, "properties": props };
+                    }).filter(f => f && f.geometry)
+                };
+
+                document.getElementById('total-objek').innerText = geojson.features.length + " DATA";
+
+                if (geojson.features.length > 0) {
+                    const bounds = new maplibregl.LngLatBounds();
+                    geojson.features.forEach(f => {
+                         if(f.geometry.type === 'Polygon') bounds.extend(f.geometry.coordinates[0][0]);
+                         else if (f.geometry.type === 'MultiPolygon') bounds.extend(f.geometry.coordinates[0][0][0]);
                     });
-                    
-                    updateBuildingHeight(currentMode);
-                } catch (e) {}
+                    if (!bounds.isEmpty()) map.fitBounds(bounds, { padding: 100, maxZoom: 18 });
+                }
+
+                map.addSource('sumber-data', { type: 'geojson', data: geojson });
+
+                map.addLayer({
+                    'id': 'bangunan-3d',
+                    'type': 'fill-extrusion',
+                    'source': 'sumber-data',
+                    'paint': {
+                        'fill-extrusion-color': [
+                            'match',
+                            ['get', 'RANGENILAI'],
+                            '2.000.000 - 5.000.000', '#f1c40f',
+                            '5.000.000 - 10.000.000', '#e67e22',
+                            '10.000.000 - 20.000.000', '#e74c3c',
+                            '> 20.000.000', '#c0392b',
+                            '#00f3ff'
+                        ],
+                        'fill-extrusion-height': ['coalesce', ['to-number', ['get', 'H_max']], 1],
+                        'fill-extrusion-base': 0,
+                        'fill-extrusion-opacity': 0.85
+                    }
+                });
+
+                document.getElementById('loader').style.opacity = 0;
+                setTimeout(() => document.getElementById('loader').style.display = 'none', 500);
+
+            } catch (err) {
+                alert("Error: " + err.message);
             }
-        }
+        });
 
-        // --- 4. INTERAKSI POPUP ---
-        map.on('click', 'bangunan-3d', function (e) {
-            var props = e.features[0].properties;
-            var coordinates = e.lngLat;
+        // === LOGIKA KLIK (POPUP VS STREET VIEW) ===
+        map.on('click', (e) => {
+            // 1. JIKA MODE STREET VIEW AKTIF
+            if (isStreetViewActive) {
+                // Buka Google Street View di Tab Baru pada koordinat yang diklik
+                const lat = e.lngLat.lat;
+                const lng = e.lngLat.lng;
+                const svUrl = `https://www.google.com/maps?q&layer=c&cbll=${lat},${lng}`;
+                window.open(svUrl, '_blank');
+                
+                // Matikan mode setelah klik (opsional, biar tidak bingung)
+                toggleStreetView(); 
+                return; // Stop, jangan munculkan popup bangunan
+            }
 
-            // AMBIL DATA ATRIBUT (Sesuaikan dengan data GeoJSON Anda)
-            var nama = props['name'] || props['nama'] || "Tanpa Nama";
-            var tipe = props['type'] || props['building'] || "-";
-            var tinggi = props['height'] || props['building:levels'] || "-";
-            var id_objek = props['id'] || Math.floor(Math.random() * 1000); // Dummy ID
+            // 2. JIKA NORMAL (POPUP BANGUNAN)
+            const features = map.queryRenderedFeatures(e.point, { layers: ['bangunan-3d'] });
+            if (!features.length) return;
 
-            // KONTEN POPUP HTML
-            var content = `
-                <div class="popup-header">
-                    <div class="popup-title">INFORMASI OBJEK</div>
+            const p = features[0].properties;
+            const cek = (val, isCurrency = false) => {
+                if (val == null || val === "" || val === "NULL") return '<span style="color:#666; font-style:italic;">-</span>';
+                if (isCurrency && !isNaN(val)) return "Rp " + Number(val).toLocaleString('id-ID');
+                return val;
+            };
+
+            let tinggiFormatted = p.H_max ? Number(p.H_max).toFixed(2) + ' Meter' : '-';
+            const idTampil = p.osm_id || '-';
+
+            const html = `
+                <div class="popup-head">
+                    <span>INFO OBJEK</span>
+                    <span style="font-size:12px; opacity:0.7; font-weight:400">ID: ${idTampil}</span>
                 </div>
-                <div class="popup-row"><span class="popup-label">ID PERSIL:</span> <span class="popup-val">${id_objek}</span></div>
-                <div class="popup-row"><span class="popup-label">TIPE HAK:</span> <span class="popup-val">${tipe}</span></div>
-                <div class="popup-row"><span class="popup-label">PENGGUNAAN:</span> <span class="popup-val">${nama}</span></div>
-                <div class="popup-row"><span class="popup-label">TINGGI:</span> <span class="popup-val">${tinggi}</span></div>
+                <div class="popup-body">
+                    <div class="popup-row"><span class="popup-label">NIB</span><span class="popup-val">${cek(p.NIB)}</span></div>
+                    <div class="popup-row"><span class="popup-label">NOP</span><span class="popup-val">${cek(p.D_NOP)}</span></div>
+                    <div class="popup-row"><span class="popup-label">DESA/KEL</span><span class="popup-val">${cek(p.DESA)}</span></div>
+                    <div class="popup-row"><span class="popup-label">NILAI TANAH</span><span class="popup-val">${cek(p.RANGENILAI)}</span></div>
+                    <div class="popup-row"><span class="popup-label">NJOP BUMI</span><span class="popup-val">${cek(p['NJOP BUMI'], true)}</span></div>
+                    <div class="popup-row"><span class="popup-label">NJOP BANGUNAN</span><span class="popup-val">${cek(p['NJOP BNG S'], true)}</span></div>
+                    <div class="popup-row" style="border:none;"><span class="popup-label">TINGGI</span><span class="popup-val" style="color:var(--primary)">${tinggiFormatted}</span></div>
+                </div>
             `;
-
-            new maplibregl.Popup()
-                .setLngLat(coordinates)
-                .setHTML(content)
-                .addTo(map);
+            new maplibregl.Popup().setLngLat(e.lngLat).setHTML(html).addTo(map);
         });
 
-        // Kursor berubah saat hover gedung
-        map.on('mouseenter', 'bangunan-3d', function () { map.getCanvas().style.cursor = 'pointer'; });
-        map.on('mouseleave', 'bangunan-3d', function () { map.getCanvas().style.cursor = ''; });
+        // Ubah Kursor saat Hover
+        map.on('mousemove', (e) => {
+            if (isStreetViewActive) {
+                map.getCanvas().style.cursor = 'crosshair'; // Kursor bidik
+            } else {
+                const features = map.queryRenderedFeatures(e.point, { layers: ['bangunan-3d'] });
+                map.getCanvas().style.cursor = features.length ? 'pointer' : '';
+            }
+        });
 
-        // --- 5. LOGIKA FUNGSI ---
-        function updateBuildingHeight(mode) {
-            if (map.getLayer('bangunan-3d')) {
-                map.setPaintProperty('bangunan-3d', 'fill-extrusion-height', mode === '2D' ? 0 : 20);
+        // === FUNGSI STREET VIEW ===
+        function toggleStreetView() {
+            isStreetViewActive = !isStreetViewActive;
+            const btn = document.getElementById('btnSV');
+            
+            if (isStreetViewActive) {
+                btn.classList.add('active');
+                btn.innerText = "KLIK PETA...";
+                map.getCanvas().style.cursor = 'crosshair';
+                alert("MODE STREET VIEW AKTIF: Klik di jalan atau area manapun pada peta untuk membuka Google Street View.");
+            } else {
+                btn.classList.remove('active');
+                btn.innerText = "STREET VIEW";
+                map.getCanvas().style.cursor = '';
             }
         }
 
-        map.on('load', loadCustomLayers);
-        map.on('styledata', loadCustomLayers);
-        
-        map.on('move', function() {
-            document.getElementById('zoom-level').innerText = map.getZoom().toFixed(1);
-            document.getElementById('pitch-level').innerText = Math.round(map.getPitch()) + '°';
-        });
-
-        function changeBasemap(styleKey, btnElement) {
+        // === FUNGSI PENDUKUNG ===
+        function gantiPeta(styleKey) {
+            const dataCache = map.getSource('sumber-data')._data;
             map.setStyle(styles[styleKey]);
-            document.querySelectorAll('.map-btn').forEach(b => b.classList.remove('active'));
-            btnElement.classList.add('active');
+            map.once('styledata', () => {
+                map.addSource('terrain-source', { type: 'raster-dem', url: 'https://demotiles.maplibre.org/terrain-tiles/tiles.json', tileSize: 256 });
+                map.setTerrain({ source: 'terrain-source', exaggeration: 1 });
+                
+                map.addSource('sumber-data', { type: 'geojson', data: dataCache });
+                map.addLayer({
+                    'id': 'bangunan-3d',
+                    'type': 'fill-extrusion',
+                    'source': 'sumber-data',
+                    'paint': {
+                        'fill-extrusion-color': [
+                            'match',
+                            ['get', 'RANGENILAI'],
+                            '2.000.000 - 5.000.000', '#f1c40f',
+                            '5.000.000 - 10.000.000', '#e67e22',
+                            '10.000.000 - 20.000.000', '#e74c3c',
+                            '> 20.000.000', '#c0392b',
+                            '#00f3ff'
+                        ],
+                        'fill-extrusion-height': ['coalesce', ['to-number', ['get', 'H_max']], 1],
+                        'fill-extrusion-base': 0,
+                        'fill-extrusion-opacity': 0.85
+                    }
+                });
+            });
         }
 
         function setMode(mode) {
-            currentMode = mode;
-            document.getElementById('btn2D').classList.remove('active');
-            document.getElementById('btn3D').classList.remove('active');
-            document.getElementById('btn' + mode).classList.add('active');
-
-            if (mode === '2D') map.easeTo({ pitch: 0, bearing: 0, duration: 1000 });
-            else map.easeTo({ pitch: 60, bearing: -20, duration: 1000 });
+            document.querySelectorAll('.btn-ctrl').forEach(b => b.classList.remove('active')); // Reset aktif kecuali SV
+            if(isStreetViewActive) document.getElementById('btnSV').classList.add('active'); // Pertahankan SV jika aktif
             
-            updateBuildingHeight(mode);
+            document.getElementById('btn'+mode).classList.add('active');
+            map.easeTo({ pitch: mode === '3D' ? 60 : 0 });
         }
+
+        function cariData() {
+            const input = document.getElementById('searchInput').value.trim();
+            if (!input) return alert("Masukkan NIB atau NOP!");
+            const source = map.getSource('sumber-data');
+            if (!source) return;
+            const features = source._data.features;
+            const found = features.find(f => {
+                const nib = f.properties.NIB ? String(f.properties.NIB) : "";
+                const nop = f.properties.D_NOP ? String(f.properties.D_NOP) : "";
+                return nib.includes(input) || nop.includes(input);
+            });
+
+            if (found) {
+                let center;
+                if(found.geometry.type === 'Polygon') center = found.geometry.coordinates[0][0];
+                else if(found.geometry.type === 'MultiPolygon') center = found.geometry.coordinates[0][0][0];
+                else return; 
+                map.flyTo({ center: center, zoom: 19, pitch: 60, speed: 1.5 });
+                setTimeout(() => {
+                    const p = found.properties;
+                    new maplibregl.Popup().setLngLat(center).setHTML(`<div class="popup-head">DITEMUKAN</div><div class="popup-body">NIB: ${p.NIB || '-'}</div>`).addTo(map);
+                }, 1500); 
+            } else {
+                alert("Data tidak ditemukan.");
+            }
+        }
+        function handleEnter(e) { if (e.key === 'Enter') cariData(); }
     </script>
 </body>
 </html>
